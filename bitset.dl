@@ -1,0 +1,17 @@
+.type bitset <: unsigned
+// Operations
+#define BOT 0x0
+//assuming 32 bit
+#define TOP  0xFFFFFFFF 
+#define SING(x) (0x1 bshl x)
+#define UNION(x,y) (x bor y)
+#define ADD(x,set) UNION(SING(x), set)
+#define INTER(x,y) (x band y)
+#define COMP(x) (TOP bxor x)
+#define DIFF(x,y) (x bxor INTER(x,y))
+
+// Predicates
+#define ISEMPTY(x) (x = 0)
+#define NONEMPTY(x) (x != 0)
+#define SUBSET(x,y) ISEMPTY(DIFF(x,y))
+#define ELEM(x, set) NONEMPTY(INTER(SING(x), set))

@@ -1,0 +1,91 @@
+//(q :- (q => q)) => (q :- (q => q)).
+
+#include "vector.dl"
+
+.type Prop = Q {} | Q_Q {} | Q_Q_Q {} | Q_Q_Q_Q_Q_Q {}
+.type ctx = set
+
+.decl q(ctx : ctx)
+.decl q_q(ctx : ctx)
+.decl q_q_q(ctx : ctx)
+.decl q_q_q_q_q_q(ctx : ctx)
+
+
+// Implication introduction and elimination
+#define IMPL(r_u,r,u, R) r_u(REM(ctx, $R())) :- u(ctx). u(@set_union(ctx1,ctx2)):- r_u(ctx1), r(ctx2).
+IMPL(q_q, q, q, Q)
+IMPL(q_q_q, q_q, q, Q_Q)
+IMPL(q_q_q_q_q_q, q_q_q, q_q_q, Q_Q_Q)
+
+
+
+/* Refl rules
+---------
+ p |- p
+*/
+
+
+q(SING($Q())).
+q_q(SING($Q_Q())).
+q_q_q(SING($Q_Q_Q())).
+q_q_q_q_q_q(SING($Q_Q_Q_Q_Q_Q())).
+
+/*
+q  |- q
+{} |- q_q
+
+*/
+
+
+/*
+These have the interpretation of weakening rules.
+   Gam |- q    Gam <= Gam2
+-----------------------
+   Gam1  |-  q
+*/
+#define SUBSUMES(q) q(ctx1) <= q(ctx2) :- 1 = @is_subset(ctx2, ctx1).
+SUBSUMES(q)
+SUBSUMES(q_q)
+SUBSUMES(q_q_q)
+SUBSUMES(q_q_q_q_q_q)
+
+
+/*
+
+G1 |- r  G2 |- q
+-----------------
+   G1 U G2 |- s
+
+*/
+
+// Ah, I'm not printing the empty context boys.
+.output q_q(IO=stdout)
+.output q(IO=stdout)
+.output q_q_q(IO=stdout)
+.output q_q_q_q_q_q(IO=stdout)
+
+.decl print_ctx(l : symbol, ctx : set, p : Prop)
+print_ctx("q", ctx, p) :- q(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+print_ctx("q_q_q", ctx, p) :- q_q_q(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+print_ctx("q_q", ctx, p) :- q_q(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+print_ctx("q6", ctx, p) :- q_q_q_q_q_q(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+//print_ctx("r", ctx, @myindex(ctx,i)) :- r(ctx), ctx = [size,_data], i = range(0,size).
+
+.output print_ctx(IO=stdout)
+
+// S {} | Q {} | R {} | T {} | U {} | R_U {} | R_T {} | R_U_R_T {}
+/*
+.decl print_sym(p : Prop, n : number)
+print_sym($T(), as($T(), number)) :- true.
+print_sym($R(), as($R(), number)) :- true.
+print_sym($Q(), as($Q(), number)) :- true.
+print_sym($S(), as($S(), number)) :- true.
+
+.output print_sym(IO=stdout)
+*/
+
+
+
+
+
+

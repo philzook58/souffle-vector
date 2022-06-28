@@ -1,0 +1,204 @@
+#include "vector.dl"
+
+.type Prop = S {} | Q {} | R {} | T {} | U {}
+.type ctx = set
+
+//.decl p(ctx : ctx)
+//p(EMPTY).
+.decl r(ctx : ctx)
+.decl q(ctx : ctx)
+.decl s(ctx : ctx)
+.decl t(ctx : ctx)
+.decl u(ctx : ctx)
+
+/*
+s :- r, q.
+t :- q, u.
+q :- r.
+*/
+s(@set_union(c1,c2)) :- r(c1), q(c2).
+t(@set_union(c1,c2)) :- q(c1), u(c2).
+q(ctx) :- r(ctx).
+
+/*
+
+G1 |- r  G2 |- q
+-----------------
+   G1 U G2 |- s
+
+*/
+
+
+/*
+These have the interpretation of weakening rules.
+   Gam |- q    Gam <= Gam2
+-----------------------
+   Gam1  |-  q
+*/
+#define SUBSUMES(q) q(ctx1) <= q(ctx2) :- 1 = @is_subset(ctx2, ctx1).
+
+
+
+//q(ctx1) <= q(ctx2) :- 1 = @is_subset(ctx2, ctx1).
+SUBSUMES(q)
+SUBSUMES(s)
+SUBSUMES(r)
+SUBSUMES(u)
+
+/*
+
+r => s.
+
+(q :- (q => q)) => (q :- (q => q)).
+*/
+
+.decl query1()
+// query1 :- (r => s).
+r(@insort( EMPTY, as($R(), number) )) :- true.
+query1() :- s(ctx), ctx = @insort( EMPTY, as($R(), number) ).
+.output query1(IO=stdout)
+
+.decl query2()
+
+// query2 :- (r => u) => (r => t).
+// query2 :- g1 => g2.
+// g1 :- (r => u).
+// (r => t) :- g2 == t :- g2, r.
+// g3 == g1 => g2
+// query :- g3
+
+// Replace all higher order => with fresh g.
+
+// g1(ctx u g1) :- g3(ctx)   top down seeding. Magic set esque.
+// can anything establish g3?  
+// g3(ctx \ g1) :- g2(g1 in ctx)  - impl intro
+// g2 :- g3, g1  defining equation - impl elim  / modus ponens
+
+/*
+
+(x => y) :- x,... |- y
+
+Gam, x |- y
+--------------
+Gam |- x => y
+
+
+Gam |- x => y    Gam2 |- x
+---------------------------
+Gam U Gam2 |- y
+
+
+*/
+
+
+// query2 :- (r => u) => (r => t).
+.decl r_u(ctx : set)
+.decl r_t(ctx : set)
+.decl r_u_r_t(ctx : set)
+
+/*
+r_u(REM(ctx, $R())) :- u(ctx), ELEM(ctx,$R()).
+u(@set_union(ctx1,ctx2)):- r_u(ctx1), r(ctx2).
+
+
+r_u(REM(ctx, $R())) :- u(ctx), ELEM(ctx,$R()).
+or
+r_u(REM(ctx, $R())) :- u(ctx).
+
+I think the second form is strictly stronger.
+
+Gam |- y
+-----------------
+Gam \ x |- x => y
+
+
+r_t(REM(ctx, R)) :- t(ctx), ELEM(ctx,R).
+
+It's also conservative in some sense with the elimination rule. Is this "harmony"?
+*/
+#define IMPL(r_u,r,u, R) r_u(REM(ctx, $R())) :- u(ctx). u(@set_union(ctx1,ctx2)):- r_u(ctx1), r(ctx2).
+IMPL(r_u,r,u, R)
+IMPL(r_t, r, t, R)
+IMPL(r_u_r_t, r_u, r_t, R_U)
+
+/*
+R_U |- r_t
+R_U, R |- t
+
+R_U, R |- q  u
+
+R |- r
+R |- q - good
+
+
+R |- r
+R_U |- R_U
+
+Yes. That'll happen.
+
+So I think this will work.
+
+
+*/
+
+query2() :- r_u_r_t(EMPTY).
+//.output r_u_r_t(IO=stdout)
+
+/*
+All predictaes can be established with their refl rule
+
+------------ Ax
+  p  |- p
+*/
+p(SING($P())).
+q(SING($Q())).
+r(SING($R())).
+u(SING($U())).
+
+
+
+//#define RSING @insort( EMPTY, as($R(), number) )
+// These are defunctionalized thingies.
+/*
+.decl g1(ctx : set)
+.decl g2(ctx : set)
+.decl g2(ctx : set)
+
+#define ELEM(ctx,x) (@elem(ctx,as($x(),number)) = 1)
+
+u(@set_union(ctx1,ctx2)) :- g1(ctx1), r(ctx2).
+r(@insort(ctx, R)) :- g1(ctx).
+
+
+g1( @insort(EMPTY, as($G1(),number))) :- true.
+query2() :- g2( @insort(EMPTY, as($G1(), number))).
+
+query2() :- t(ctx), ctx = @insort(@insort(EMPTY,R), G1).
+
+
+// g1 :- (r => u)
+r(@insort( EMPTY, as($R(), number) )) :- true.
+g1(@set_diff(ctx, RSING)) :-  u(ctx), ctx = RSING.
+// query2 :- g1, (r => t)
+r(@set_union(ctx, RSING)) :- g1(ctx).
+query2() :- t(ctx), ctx = RSING.
+.output query2(IO=stdout)
+*/
+
+/*
+if we wanted pure bottom up
+We can enumerate all contexts, in this case.
+allctxs(EMPTY).
+allctxs(@insrt(ctx, t)) :- allctxs(ctx), (t = $Q() ; t = $R() ; ...).  
+
+
+
+
+p(SING(P)).
+q(SING(Q)).
+r(SING(R)).
+u(SING(U)).
+g1(SING(G1)).
+
+
+*/

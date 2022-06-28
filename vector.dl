@@ -1,0 +1,22 @@
+.pragma "libraries" "vector"
+.type bool <: number
+.functor mypush(v : vec, x : number):vec stateful
+.functor insort(v : set, x : number):set stateful
+.functor myindex(v : set, i : unsigned):number stateful
+.functor is_subset(v : set, v2 : set):bool stateful
+.functor inter(v : set, v2 : set):set stateful
+.functor set_union(v : set, v2 : set):set stateful
+.functor set_diff(v : set, v2 : set):set stateful
+.functor elem(v : set, x : number):bool stateful
+
+
+.type vec = [size : unsigned, data : dataN]
+.type set = [size : unsigned, data : dataN] // can't subset type records?
+.type dataN <: number
+.type data1 = [x0 : number]
+.type data2 = [x0 : number, x1 : number]
+
+#define EMPTY [0,0]
+#define SING(R) @insort(EMPTY, as(R, number))
+#define ELEM(set,R) (1 = @elem(set,as(R, number)))
+#define REM(ctx,P)  @set_diff(ctx, SING(P))

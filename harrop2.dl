@@ -1,0 +1,99 @@
+#include "vector.dl"
+
+.type Prop = Q {} | R{} | R_T {} | R_U {} |  R_U_R_T {} |  S {} | T {} | U {} 
+.type ctx = set
+
+.decl r(ctx : ctx)
+.decl q(ctx : ctx)
+.decl s(ctx : ctx)
+.decl t(ctx : ctx)
+.decl u(ctx : ctx)
+
+// query2 :- (r => u) => (r => t).
+.decl r_u(ctx : set)
+.decl r_t(ctx : set)
+.decl r_u_r_t(ctx : set)
+
+// Implication introduction and elimination
+#define IMPL(r_u,r,u, R) r_u(REM(ctx, $R())) :- u(ctx). u(@set_union(ctx1,ctx2)):- r_u(ctx1), r(ctx2).
+IMPL(r_u,r,u, R)
+IMPL(r_t, r, t, R)
+IMPL(r_u_r_t, r_u, r_t, R_U)
+
+
+/* Refl rules
+---------
+ p |- p
+*/
+
+r(SING($R())).
+q(SING($Q())).
+s(SING($S())).
+t(SING($T())).
+u(SING($U())).
+r_u(SING($R_U())).
+r_t(SING($R_T())).
+r_u_r_t(SING($R_U_R_T())).
+
+/*
+These have the interpretation of weakening rules.
+   Gam |- q    Gam <= Gam2
+-----------------------
+   Gam1  |-  q
+*/
+#define SUBSUMES(q) q(ctx1) <= q(ctx2) :- 1 = @is_subset(ctx2, ctx1).
+SUBSUMES(q)
+SUBSUMES(s)
+SUBSUMES(r)
+SUBSUMES(t)
+SUBSUMES(u)
+SUBSUMES(r_u)
+SUBSUMES(r_t)
+SUBSUMES(r_u_r_t)
+
+/* s :- r, q.
+   t :- q, u.
+   q :- r.   */
+s(@set_union(c1,c2)) :- r(c1), q(c2).
+t(@set_union(c1,c2)) :- q(c1), u(c2).
+q(ctx) :- r(ctx).
+
+/*
+
+G1 |- r  G2 |- q
+-----------------
+   G1 U G2 |- s
+
+*/
+
+.output r_u_r_t(IO=stdout)
+.output t(IO=stdout)
+.output u(IO=stdout)
+.output r(IO=stdout)
+.output r_t(IO=stdout)
+
+
+.decl print_ctx(l : symbol, ctx : set, p : Prop)
+print_ctx("t", ctx, p) :- t(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+print_ctx("u", ctx, p) :- u(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+print_ctx("r_t", ctx, p) :- r_t(ctx), ctx = [size,_data], i = range(0,size), p = as(@myindex(ctx,i), Prop).
+//print_ctx("r", ctx, @myindex(ctx,i)) :- r(ctx), ctx = [size,_data], i = range(0,size).
+
+.output print_ctx(IO=stdout)
+
+// S {} | Q {} | R {} | T {} | U {} | R_U {} | R_T {} | R_U_R_T {}
+/*
+.decl print_sym(p : Prop, n : number)
+print_sym($T(), as($T(), number)) :- true.
+print_sym($R(), as($R(), number)) :- true.
+print_sym($Q(), as($Q(), number)) :- true.
+print_sym($S(), as($S(), number)) :- true.
+
+.output print_sym(IO=stdout)
+*/
+
+
+
+
+
+
