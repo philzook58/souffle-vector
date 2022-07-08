@@ -1,0 +1,20 @@
+.pragma "libraries" "vector"
+// I don't think this subset relation protects us from anything useful unfortunately
+// We could box type uf = [symbol]
+// Wait actually this works perfectly?
+.type str_uf <: symbol
+
+.functor norm_str_uf(s : symbol):str_uf stateful
+.functor str_union(s : symbol, i : unsigned, j : unsigned):symbol stateful
+.functor str_uf_sub(s : str_uf, t : str_uf):unsigned stateful
+
+#define FRESH0 "!"
+#define FRESH1 "\""
+#define FRESH2 "#"
+#define FRESH3 "%"
+#define FRESH5 "&"
+#define FRESH6 "'"
+#define FRESH7 "("
+#define FRESH8 ")"
+
+#define FIND(uf,i) substr(uf,i,1)

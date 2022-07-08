@@ -1,0 +1,53 @@
+// This order matters for c++
+.pragma "libraries" "term"
+.functor count_var(t : term):number stateful // number because substr takes number only
+
+// maintain in alphabectical order
+.type term = 
+  App {f : term, x : term} // 0
+| Num {n : number} // 1
+| Sym {s : symbol} // 2
+| Var {} // 3
+
+
+
+
+
+#define NIL $Sym("nil")
+#define T1(f,a) $App(f,a)
+#define T2(f,a,b) $App($App(f,a),b)
+#define CONS(x,xs) T2($Sym("cons"), x, xs)
+ 
+.decl terms(t : term)
+terms(f), terms(x) :- terms($App(f, x)). 
+
+.decl nvars(t : term, n : unsigned)
+nvars($Var(), 1).
+nvars(t, 0) :- terms(t), (t = $Sym(_s) ; t = $Num(_n)).
+nvars(t, nf + nx) :- terms(t), t = $App(f,x), nvars(f,nf), nvars(x,nx).
+
+#define GROUND(t) nvars(t,0)
+
+/*
+            | T0 {head : symbol} 
+            | T1 {head : symbol, x : term}
+            | T2 {head : symbol, x : term, y : term}
+            | Term {head : symbol, 
+            | Var {n : unsigned} 
+
+*/
+            /*
+            | Num {n : number}
+            | UNum {u : unsigned}
+            | Float {f : float}
+
+            // versus explicit numbers terms
+            | App {t1 : Term, t2 : Term}
+
+            | Lam {}
+            | BVar {}
+
+
+            This is basically stating an alternative explicit encoding so that I can write C++ that is generic
+
+            */

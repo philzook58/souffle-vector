@@ -1,0 +1,8 @@
+#include "term.dl"
+
+.decl test(t : term, n : unsigned)
+test(t, @count_var(t)) :- t  = $Sym("a").
+test(t, @count_var(t)) :- t  = $Var().
+test(t, @count_var(t)) :- t  = $App($Var(), $Sym("a")).
+test(t, @count_var(t)) :- t  = $App($App($Var(), $Var()), $App($Num(1),$Sym("a"))).
+.output test(IO=stdout)

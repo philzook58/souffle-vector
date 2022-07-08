@@ -417,6 +417,152 @@ extern "C"
             return recordTable->pack(myTuple1, 2);
         }
     }
+
+    souffle::RamDomain uf_union(
+        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain v, souffle::RamDomain i, souffle::RamDomain j)
+    {
+        assert(symbolTable && "NULL symbol table");
+        assert(recordTable && "NULL record table");
+
+        const souffle::RamDomain *myTuple0 = recordTable->unpack(v, 2);
+        const souffle::RamDomain size = myTuple0[0];
+        const souffle::RamDomain vec0 = myTuple0[1];
+        assert(i < size && j < size && "Out of bounds indexing");
+        assert(size != 0 && "UF can't be size 0 for union");
+        const souffle::RamDomain *data = recordTable->unpack(vec0, size);
+        if (data[i] == data[j])
+        { // already in same eqclass
+            return v;
+        }
+        std::vector<souffle::RamDomain> vec;
+        souffle::RamDomain pmin = std::min(data[i], data[j]); // pi <= i
+        souffle::RamDomain pmax = std::max(data[i], data[j]); //  pj <= j
+        for (int k = 0; k < size; k++)
+        {
+            souffle::RamDomain p = data[k];
+            if (p == pmax || p == i || p == j)
+            {
+                vec.push_back(pmin);
+            }
+            else
+            {
+                vec.push_back(data[i]);
+            }
+        }
+        const souffle::RamDomain vec2 = recordTable->pack(vec.data(), size);
+        souffle::RamDomain myTuple1[2] = {size, vec2};
+        return recordTable->pack(myTuple1, 2);
+    }
+
+    // uf_find _is_ @myindex
+    souffle::RamDomain norm_str_uf(souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable,
+                                   souffle::RamDomain uf_id)
+    {
+        assert(symbolTable && "NULL symbol table");
+        assert(recordTable && "NULL record table");
+        const std::string &uf = symbolTable->decode(uf_id);
+        int cmap[256];
+        memset(cmap, -1, sizeof(cmap)); // careful here. Does not generalize
+        std::string uf2;
+        char fresh = '0';
+        for (int i = 0; uf[i] != '\0'; i++)
+        {
+            int normed = cmap[uf[i]];
+            if (normed < 0)
+            { // This value has not been seen yet.
+                assert(fresh <= 'z' && "You are using a scary size of local union find");
+                // std::cout << "fresh" << fresh << std::endl;
+                cmap[uf[i]] = fresh;
+                uf2.push_back(fresh);
+                fresh++;
+            }
+            else
+            {
+                // std::cout << "not fresh \n";
+                uf2.push_back(static_cast<char>(normed));
+            }
+        }
+        return symbolTable->encode(uf2);
+    }
+
+    souffle::RamDomain str_union(
+        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain uf_id, souffle::RamDomain i, souffle::RamDomain j)
+    {
+        assert(symbolTable && "NULL symbol table");
+        assert(recordTable && "NULL record table");
+
+        const std::string &uf = symbolTable->decode(uf_id);
+        assert(i < uf.length() && j < uf.length() && "Out of bound union index.");
+        if (uf[i] == uf[j])
+        { // already in same eqclass
+            return uf_id;
+        }
+        std::string uf2;
+        souffle::RamDomain pmin = std::min(uf[i], uf[j]); // pi <= i
+        souffle::RamDomain pmax = std::max(uf[i], uf[j]); //  pj <= j
+        for (auto &ch : uf)
+        {
+            if (ch == pmax)
+            {
+                uf2.push_back(pmin);
+            }
+            else
+            {
+                uf2.push_back(ch);
+            }
+        }
+        return symbolTable->encode(uf2);
+    }
+
+    // uf_union
+    // uf_inter
+
+    // uf_sub doesn't need normalization persay
+    // but we need to know which keys have been seen and which haven't
+    // https://en.wikipedia.org/wiki/Partition_of_a_set#Refinement_of_partitions
+    souffle::RamDomain str_uf_sub(
+        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain uf_id1, souffle::RamDomain uf_id2)
+    {
+        assert(symbolTable && "NULL symbol table");
+        assert(recordTable && "NULL record table");
+
+        if (uf_id1 == uf_id2)
+        { // Same ufs. Equality
+            return 1;
+        }
+
+        const std::string &uf1 = symbolTable->decode(uf_id1);
+        const std::string &uf2 = symbolTable->decode(uf_id2);
+        assert(uf1.length() == uf2.length() && "I'm not sure you should be comparing unequal length union finds");
+        if (uf1.length() != uf2.length())
+        {
+            return 0; // maybe. is 0123 different from 012?
+        }
+
+        char cmap[256]; // map from character in uf1 to uf2
+        // 012 <= 000 is ok.  000 <= 012 is not.
+        // ids in lesser should uniquely match to ids in the latter
+        //char seen = '0' - 1;
+        bool seen[256] = {false}; // This seems to be ok?
+        //memset(cmap, false, sizeof(cmap)); 
+        for (int i = 0; i < uf1.length(); i++)
+        {
+            if (!seen[uf1[i]]) // uf1[i] > seen) // first time seeing this id. hence cmap is not initialized yet at this position
+            {
+                //seen = uf1[i];
+                seen[uf1[i]] = true;
+                cmap[uf1[i]] = uf2[i]; // fill in cmap at this position
+            }
+            else
+            {
+                if (cmap[uf1[i]] != uf2[i]) // If two elements from 1 point to different elements from 2, not a finer relation.
+                {
+                    return 0;
+                }
+            }
+        }
+        return 1;
+    }
 }
 
 /*

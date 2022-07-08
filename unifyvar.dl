@@ -1,0 +1,24 @@
+#include "term.dl"
+#include "uf.dl"
+
+.decl append(x : term, y : term, z : term, uf : str_uf)
+
+append(NIL, $Var(), $Var(), "00").
+append(CONS($Var(), x),   y,   CONS($Var(), z),   @norm_str_uf(ufres)) :- 
+        append(x, y, z, uf),
+        nx = @count_var(x), ny = @count_var(y), nz = @count_var(z),
+        fresh = FRESH0,
+        ufx = substr(uf,0,nx),
+        ufy = substr(uf,nx,ny),
+        ufz = substr(uf,nx+ny,nz),
+        ufres = cat(fresh, cat(ufx, cat(ufy, cat(fresh, ufz)))).
+
+.limitsize append(n=5)
+
+.output append(IO=stdout)
+
+// Variant tabling
+// vs
+// Subsumptive tabling
+
+// append(a,b,c,coarse) <= append(a,b,c,fine) :- 1 = @str_uf_sub(fine, coarse).

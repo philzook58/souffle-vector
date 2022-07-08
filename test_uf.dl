@@ -1,0 +1,65 @@
+#include "uf.dl"
+
+// strlen, substr, cat
+.decl test(s : symbol, t : str_uf)
+test(t, @norm_str_uf(t)) :- t = "hello".
+test(t, @norm_str_uf(t)) :- t = "jkfjdfnklmdasnckhewqiofehpiofcndjsonCJNdofqoehfiwe2489348290384903218048#$#%!()&$(&$&()!&%&%)*_".
+
+// All of these normalize to the same thing, which is the point.
+test(t, @norm_str_uf(@str_union(@str_union(t,0,1),1,3))) :- t = "hello2".
+test(t, @norm_str_uf(@str_union(@str_union(t,1,3),0,1))) :- t = "hello2".
+test(t, @norm_str_uf(@str_union(@str_union(t,0,3),0,1))) :- t = "hello2".
+test(t, to_string(@str_uf_sub(@norm_str_uf(t), @norm_str_uf(t)))) :- t = "hello2".
+test("012 <= 000", to_string(@str_uf_sub("012", "000"))) :- true.
+test("000 <= 012", to_string(@str_uf_sub("000", "012"))) :- true.
+test("010 <= 012", to_string(@str_uf_sub("010", "012"))) :- true.
+test("011 <= 000", to_string(@str_uf_sub("011", "000"))) :- true.
+test("012 <= 011", to_string(@str_uf_sub("012", "011"))) :- true.
+.output test(IO=stdout)
+
+/*
+
+copying a whole subtree is actually easy using concat and slices, then normalizing
+First class union find
+
+The difference between datalog variables and unification variables. A strange gap appears. Datalog is our meta system, 
+but we have embedded an internal logical system.
+
+// named. not alpha equivalent. Subsitution doesn't work good
+.type term = Lam {x : symbol, t : term} | Var {v : symbol} | App {f : term, x : term}
+
+// dfs named. A canonical naming by visitation order. Has alpha equivalence, but at cost of traversing to normalize it.
+// subterms need to be renormalize when considered on their own for some purposes.
+// Subsitution is... I dunno. It denormalizes certainly. Probably untrustworthy.
+.type term = Lam {x : unsigned, t : term} | Var {v : unsigned} | App {f : term, x : term}
+
+// regular de bruijn. Canonical but at what cost. Data type alone does not make de bruijn level vs index obvious.
+.type term = Lam {t : term} | Var {i : unsigned} | App {f : term, x : term}
+
+
+// locally nameless. What I'm suggesting is locally nameless using dfs-named.
+// it's interesting that term indexing has correlated lambda rep?
+
+.type term_shape = Lam {t : term} | Var {} | App {f : term, x : term}
+//term_shape is nice. Canonical. Skeleton
+
+Co de-bruijn notation attaches maps at Lam.
+.type tmap = Both {tmap, tmap} | None {} | Left {tmap} | Right {tmap}
+
+unbundled shape and maps or names. Why do this?
+.term = [term_shape, ids]
+
+
+
+What is the difference between a prolog and datalog
+- pattern matching vs unification
+- bottom up vs top down. top down datalog, tabled prolog.
+
+
+It's unfortunate souffle does not offer an interface that can avoid intermediate encode decode steps.
+I can pass an instruction string to be interpreter to souffle. (souffle-lua for example)
+It is very arguable if this is preferable.
+I do understand it would be hard and untrsutworthy though. You'd need to do manual memory management in souffle itself.
+
+
+*/
