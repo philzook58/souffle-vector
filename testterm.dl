@@ -1,8 +1,60 @@
 #include "term.dl"
 
-.decl test(t : term, n : unsigned)
-test(t, @count_var(t)) :- t  = $Sym("a").
-test(t, @count_var(t)) :- t  = $Var().
-test(t, @count_var(t)) :- t  = $App($Var(), $Sym("a")).
-test(t, @count_var(t)) :- t  = $App($App($Var(), $Var()), $App($Num(1),$Sym("a"))).
-.output test(IO=stdout)
+.decl test_term(t : symbol)
+test_term("Sym not var") :- t  = $Sym("a"), @count_var(t) != 0.
+test_term("Var has count 1") :- t  = $Var(), @count_var(t) != 1.
+test_term("Combo has count 1") :- t  = $App($Var(), $Sym("a")),  @count_var(t) != 1.
+test_term("Deeper count 2") :- t  = $App($App($Var(), $Var()), $App($Num(1),$Sym("a"))),  @count_var(t) != 2.
+
+test_term("Reabstact  F(0) = bvar(0) ") :- @reabstract1($BVar(0), 0) != $Lam($BVar(0)). 
+// Failure as nil is super fishy
+test_term("Reabstact  F(1) = bvar(0) should fail ") :- as(@reabstract1($BVar(0), 1),number) !=  0. 
+
+test_term("Reabstact  F(1) = lam(app(bvar(1), bvar(0))) should succeed ") :- 
+    @reabstract1($Lam($App($BVar(0), $BVar(1))), 0) !=  $Lam($Lam($App($BVar(0), $BVar(1)))). 
+
+
+.decl named_term(name : symbol, t : term)
+named_term("t1", $Lam($Lam($App($BVar(0), $BVar(1))))).
+
+test_term("Testing out pattern use case") :- 
+   named_term("t1", t), t = $Lam($Lam($App($BVar(0), F))), @reabstract1(F,1) != $Lam($BVar(0)). 
+
+test_term("Testing out pattern use case. Should fail") :- 
+   named_term("t1", t), t = $Lam($Lam($App($BVar(0), F))), NONNIL(@reabstract1(F,0)). 
+
+
+test_term("beta test 1") :- @beta_norm($Sym("foo")) != $Sym("foo").
+test_term("beta test 2") :- @beta_norm($Num(3)) != $Num(3).
+test_term("beta test 3") :- @beta_norm($Lam($BVar(0))) != $Lam($BVar(0)).
+test_term("beta test 4") :- @beta_norm($App($Lam($BVar(0)), $Sym("foo"))) != $Sym("foo").
+test_term("beta test 4") :- $Lam($App($BVar(0), $Sym("x"))) = t, @beta_norm(t) != t.
+test_term("beta test 5") :- $App($App($Lam($Lam($App($BVar(0), $BVar(1)))), $Sym("x")), $Sym("f")) = t, 
+                            @beta_norm(t) != $App($Sym("f"), $Sym("x")).
+test_term("beta test 6") :- $App($Lam($Lam($App($BVar(0), $BVar(1)))), $Sym("x")) = t, @beta_norm(t) != $Lam($App($BVar(0), $Sym("x"))).
+test_term("beta test 7") :- $App($Lam($Lam($App($BVar(1), $BVar(1)))), $Sym("x")) = t, @beta_norm(t) != $Lam($App($Sym("x"), $Sym("x"))).
+
+/*
+
+Enumerate terms and normalize them? look for crashes.
+pre
+*/
+
+/*
+If pattern was x \ F x, needs to be written Lam(F), reasbtract1(F,0).
+
+If I make reabstract non failing, I can use a chain of reasbtract to do abstitrary many reasntractions.
+Then a seperate check_escape function.
+I've already gone down the road.
+Maybe nil values is good because crashing horribly is better than silent acceptance.
+
+*/
+
+.output test_term(IO=stdout)
+
+/*
+// Helper for when I need to inspect.
+.decl myprint(t : term)
+myprint(@reabstract1($Lam($App($BVar(0), $BVar(1))), 0)) :- true.
+.output myprint(IO=stdout)
+*/

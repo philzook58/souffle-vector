@@ -1,13 +1,20 @@
-// This order matters for c++
 .pragma "libraries" "term"
 .functor count_var(t : term):number stateful // number because substr takes number only
 
-// maintain in alphabectical order
+.functor reabstract1(t : term, n : unsigned):term stateful // number because substr takes number only
+
+.functor reabstract2(t : term, n : unsigned, n2: unsigned):term stateful // number because substr takes number only
+
+.functor beta_norm(t:term):term stateful
+ // maintain in alphabectical order
 .type term = 
   App {f : term, x : term} // 0
-| Num {n : number} // 1
-| Sym {s : symbol} // 2
-| Var {} // 3
+| BVar {n : unsigned} // 1
+| Lam {b : term} //2 
+| Num {n : number} // 3
+| Sym {s : symbol} // 4
+| Var {} // 5
+| ZInternal {n : number} // 6
 
 
 
@@ -17,7 +24,12 @@
 #define T1(f,a) $App(f,a)
 #define T2(f,a,b) $App($App(f,a),b)
 #define CONS(x,xs) T2($Sym("cons"), x, xs)
- 
+
+
+#define NONNIL(p) (as(p, number) != 0)
+// hmm this doesn't really work 
+#define PAT1(f,x, t) (t = @reabstract1(f,x) , as(t ,number) != 0)
+
 .decl terms(t : term)
 terms(f), terms(x) :- terms($App(f, x)). 
 

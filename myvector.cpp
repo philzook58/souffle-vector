@@ -12,43 +12,34 @@ using FF_uint = uint32_t;
 using FF_float = float;
 #endif
 
+// pass by reference or whatever?
+inline souffle::RamDomain mk_vec(souffle::RecordTable *recordTable, const std::vector<souffle::RamDomain> &vec)
+{
+    const souffle::RamDomain vec2 = recordTable->pack(vec.data(), vec.size());
+    souffle::RamDomain myTuple1[2] = {vec.size(), vec2};
+    return recordTable->pack(myTuple1, 2);
+}
+
+// Eh does this even make sense?
+// what does returning a vector do?
+inline std::vector<souffle::RamDomain> get_vec(souffle::RecordTable *recordTable, souffle::RamDomain vec_id)
+{
+    const souffle::RamDomain *myTuple0 = recordTable->unpack(vec_id, 2);
+    const souffle::RamDomain size = myTuple0[0];
+    const souffle::RamDomain vec0 = myTuple0[1];
+    const souffle::RamDomain *data = recordTable->unpack(vec0, size);
+    std::vector<souffle::RamDomain> vec;
+    for (int i = 0; i < size; i++)
+    {
+        vec.push_back(data[i]);
+    }
+    return vec;
+}
+
+
 // https://github.com/souffle-lang/souffle/blob/master/tests/interface/functors/functors.cpp
 extern "C"
 {
-
-    /*
-    int32_t f(int32_t x) {
-        return x + 1;
-    }
-
-    const char *g() {
-        return "Hello world";
-    }
-    */
-
-    souffle::RamDomain myappend(
-        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain arg)
-    {
-        assert(symbolTable && "NULL symbol table");
-        assert(recordTable && "NULL record table");
-
-        if (arg == 0)
-        {
-            // Argument is nil
-            souffle::RamDomain myTuple[2] = {0, 0};
-            // Return [0, nil]
-            return recordTable->pack(myTuple, 2);
-        }
-        else
-        {
-            // Argument is a list element [x, l] where
-            // x is a number and l is another list element
-            const souffle::RamDomain *myTuple0 = recordTable->unpack(arg, 2);
-            souffle::RamDomain myTuple1[2] = {myTuple0[0] + 1, myTuple0[0]};
-            // Return [x+1, [x, l]]
-            return recordTable->pack(myTuple1, 2);
-        }
-    }
 
     souffle::RamDomain mypush(
         souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain v, souffle::RamDomain x)
@@ -542,14 +533,14 @@ extern "C"
         char cmap[256]; // map from character in uf1 to uf2
         // 012 <= 000 is ok.  000 <= 012 is not.
         // ids in lesser should uniquely match to ids in the latter
-        //char seen = '0' - 1;
+        // char seen = '0' - 1;
         bool seen[256] = {false}; // This seems to be ok?
-        //memset(cmap, false, sizeof(cmap)); 
+        // memset(cmap, false, sizeof(cmap));
         for (int i = 0; i < uf1.length(); i++)
         {
             if (!seen[uf1[i]]) // uf1[i] > seen) // first time seeing this id. hence cmap is not initialized yet at this position
             {
-                //seen = uf1[i];
+                // seen = uf1[i];
                 seen[uf1[i]] = true;
                 cmap[uf1[i]] = uf2[i]; // fill in cmap at this position
             }
