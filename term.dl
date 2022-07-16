@@ -1,30 +1,97 @@
 .pragma "libraries" "term"
-.functor count_var(t : term):number stateful // number because substr takes number only
+// max_var and shift let us combine two terms of distinct free vars.
 
-.functor reabstract1(t : term, n : unsigned):term stateful // number because substr takes number only
+.functor max_var(t : term):number stateful
+.functor shift_term(t : term, n : number):term stateful
+.functor abstract(n : freevar, t:term):scope stateful
+.functor instantiate(e:term, t:scope):term stateful
+.functor norm(t: term):term stateful // norm_term
 
-.functor reabstract2(t : term, n : unsigned, n2: unsigned):term stateful // number because substr takes number only
 
-.functor beta_norm(t:term):term stateful
- // maintain in alphabectical order
+.type freevar <: number
+.type db_index <:  number
+.type scope <:  number
+
 .type term = 
-  App {f : term, x : term} // 0
-| BVar {n : unsigned} // 1
-| Lam {b : term} //2 
+  BVar {n : db_index} // 0 // What. Why?
+| Bind {b : scope}  // 1
+| FVar {n : freevar} // 2
 | Num {n : number} // 3
 | Sym {s : symbol} // 4
-| Var {} // 5
-| ZInternal {n : number} // 6
+| T2 {f : term, x : term} // 5
+
+// .type norm_term <: term // Hmm. No go?
+
+#define MKBIND(b) $Bind(as(b, scope))
+
+/*
+.type testtype = Foo {p : ptest}
+.type ptest <: testtype
+
+foo(a) :- foo(a). Is ok
+Only when we traverse under lam
+$Lam(a : raw)
+
+.type term = Lam {} | 
+.type wf_term <: term
+.type closed_term <: term
+foo(wf_term) :- foo(wf_term)
+
+Yeah, duplication of constructors is how to do it in ocaml.
+type closed_term = Lam {term} | App {closed_term, closed_term} 
+reabstract(p : term, i,j):option_closed_term
+
+It's just annoying to write terms now.
+I guess as(whatever ,closed_term) works. If you trust it.
+
+
+Kind of annoying to write concrete terms now.
+.type scoped_term = 
+  | Lam
+  | 
+
+
+.type term
+  | App {f : pterm, x : pterm}
+
+.functor ho_pat1(f:pterm, i:unsigned):term
+
+.type pterm <: term
+
+Or use wrapper
+.type pterm = [t : pterm]
+
+ooh. Wrapper forces us to check for nil!
+It's more expensive though. Hm.
+.type optionterm = [t:term]
+
+duplicated?
+.type term
+ | APp {pterm}
+.type pterm
+ | _App
+
+Monomorphic identity functions are a way to enforce type checking
+
+.functor id_term(t:term):term stateful
+
+We can take off the id_term call penalty by hiding it behind a macro indirection
+#ifdef DEBUG
+#define IS_TERM(id_term(x))
+#else
+#defein IS_TERM(x) x
+#endif
+
+*/
 
 
 
-
+/*
 
 #define NIL $Sym("nil")
 #define T1(f,a) $App(f,a)
 #define T2(f,a,b) $App($App(f,a),b)
 #define CONS(x,xs) T2($Sym("cons"), x, xs)
-
 
 #define NONNIL(p) (as(p, number) != 0)
 // hmm this doesn't really work 
@@ -39,8 +106,6 @@ nvars(t, 0) :- terms(t), (t = $Sym(_s) ; t = $Num(_n)).
 nvars(t, nf + nx) :- terms(t), t = $App(f,x), nvars(f,nf), nvars(x,nx).
 
 #define GROUND(t) nvars(t,0)
-
-/*
             | T0 {head : symbol} 
             | T1 {head : symbol, x : term}
             | T2 {head : symbol, x : term, y : term}

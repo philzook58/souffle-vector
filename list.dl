@@ -1,0 +1,35 @@
+
+#define LIST1(x) [x ,nil]
+#define LIST2(x,y) [x ,LIST1(y)]
+#define LIST3(x,y,z) [x ,LIST2(y,z)]
+#define LIST4(x,y,z,w) [x ,LIST3(y,z,w)]
+#define LIST5(x,y,z,w,u) [x ,LIST4(y,z,w,u)]
+#define LIST6(x,y,z,w,u,v) [x ,LIST5(y,z,w,u,v)]
+
+// Patterns that alloc for the tail?
+#define PLIST1(x,tail) [x ,tail]
+
+.functor sort()
+.functor sort_unique()
+.functor list_length()
+.functor list_rev()
+.functor append(l1 : list, l2 : list):list
+.functor mem(x : number, l : list):unsigned
+// zip
+// assoc - search assoc map
+
+
+// concat / flatten
+// Not really clear how this could be done:
+// filter
+// fold
+// map
+// maybe with souffle-lua or another embedded dsl.
+
+// guile + cell [ , ]
+// guild + term
+
+// partition : 
+// filter_lt
+// defunctionalize a set of common things? GT(x), LE(y),
+ 

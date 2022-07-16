@@ -3,6 +3,7 @@
 #include <cassert>
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
 #if RAM_DOMAIN_SIZE == 64
 using FF_int = int64_t;
 using FF_uint = uint64_t;
@@ -13,176 +14,57 @@ using FF_uint = uint32_t;
 using FF_float = float;
 #endif
 
-#define APP 0
-#define BVAR 1
-#define LAM 2
+/*
+.type term =
+| Bind {b : scope} // 0
+| BVar {n : db_index} // 1
+| FVar {n : freevar} // 2
+| Num {n : number} // 3
+| Sym {s : symbol} // 4
+| T2 {f : term, x : term} // 5
+*/
+
+#define BIND 1
+#define BVAR 0
+#define FVAR 2
 #define NUM 3
 #define SYM 4
-#define VAR 5
-#define ZFVAR 6
+#define T2 5
 
-#define NTAGS 6
+#define NTAGS 5
 
 #define NIL 0
 
-/*
-Options:
-2. use variant? use shared_ptr ref counted terms
-3. use union. Need manual memory mangament / custom deconstrucotrs? Arena?
-4. use classes and visitor pattern also shared_ptr
-5. bite the bullet, add a constructor for nameless manipulation. It's not so bad.
-*/
-
-/*
-struct app_node
-{
-    std::shared_ptr<term> f;
-    std::shared_ptr<term> x;
-};*/
-
-/*
-terms are going to be stored in a vector `recexpr`.
-They exists very ephemerally during beta normalization.
-*/
-
-struct term;
-
-using recexpr = std::vector<term>;
-
-union uterm
-{
-    recexpr::size_type body;                               // Lam
-    std::pair<recexpr::size_type, recexpr::size_type> app; // App
-    souffle::RamDomain ramdom;                             // Everything else.
-};
-
-struct term
-{
-    souffle::RamDomain tag;
-    uterm data;
-};
-
-// Helpers to make recexpr objects.
-recexpr::size_type mk_bvar(recexpr &expr, souffle::RamDomain i)
-{
-    term t = {BVAR, 0};
-    t.data.ramdom = i;
-    expr.push_back(t);
-    return expr.size() - 1;
-}
-
-recexpr::size_type mk_fvar(recexpr &expr, souffle::RamDomain i)
-{
-    term t = {ZFVAR, 0};
-    t.data.ramdom = i;
-    expr.push_back(t);
-    return expr.size() - 1;
-}
-
-recexpr::size_type mk_lam(recexpr &expr, recexpr::size_type i)
-{
-    term t = {LAM, 0};
-    t.data.body = i;
-    expr.push_back(t);
-    return expr.size() - 1;
-}
-
-recexpr::size_type mk_app(recexpr &expr, recexpr::size_type f, recexpr::size_type x)
-{
-    term t = {APP, 0};
-    t.data.app = std::make_pair(f, x);
-    expr.push_back(t);
-    return expr.size() - 1;
-}
-
 // Helpers to make souffle ADTs
-inline souffle::RamDomain mk_app(souffle::RecordTable *recordTable, souffle::RamDomain f, souffle::RamDomain x)
+inline souffle::RamDomain mk_t2(souffle::RecordTable *recordTable, souffle::RamDomain f, souffle::RamDomain x)
 {
     souffle::RamDomain myTuple1[2] = {f, x};
     const souffle::RamDomain f_x0 = recordTable->pack(myTuple1, 2);
-    souffle::RamDomain myTuple2[2] = {APP, f_x0};
+    souffle::RamDomain myTuple2[2] = {T2, f_x0};
     return recordTable->pack(myTuple2, 2);
 }
 
-inline souffle::RamDomain mk_lam(souffle::RecordTable *recordTable, souffle::RamDomain b)
+inline souffle::RamDomain mk_bind(souffle::RecordTable *recordTable, souffle::RamDomain b)
 {
-    souffle::RamDomain myTuple2[2] = {LAM, b};
+    souffle::RamDomain myTuple2[2] = {BIND, b};
     return recordTable->pack(myTuple2, 2);
 }
+
 inline souffle::RamDomain mk_bvar(souffle::RecordTable *recordTable, souffle::RamDomain i)
 {
     souffle::RamDomain myTuple2[2] = {BVAR, i};
     return recordTable->pack(myTuple2, 2);
 }
 
-
-// Could do better recording of already seen stuff in Map. More memoization? Isn't clear the search is worth the effort.
-recexpr::size_type from_souffle(souffle::RecordTable *recordTable, souffle::RamDomain t, recexpr &expr)
+inline souffle::RamDomain mk_fvar(souffle::RecordTable *recordTable, souffle::RamDomain i)
 {
-    const souffle::RamDomain *myTuple0 = recordTable->unpack(t, 2);
-    souffle::RamDomain tag = myTuple0[0];
-    term myterm = {tag, 0};
-    // myterm.tag = tag;
-    switch (tag)
-    {
-    case APP:
-    {
-        const souffle::RamDomain *f_x = recordTable->unpack(myTuple0[1], 2);
-        myterm.data.app.first = from_souffle(recordTable, f_x[0], expr);
-        myterm.data.app.second = from_souffle(recordTable, f_x[1], expr);
-        break;
-    }
-    case LAM:
-    {
-        myterm.data.body = from_souffle(recordTable, myTuple0[1], expr);
-        break;
-    }
-    case BVAR:
-    case NUM:
-    case SYM:
-    case VAR:
-    {
-        myterm.data.ramdom = myTuple0[1];
-        break;
-    }
-    default:
-        assert(false && "Missed Case in from_souffle");
-    }
-    expr.push_back(myterm); // maybe we could use emplace_back?
-    return expr.size() - 1;
-}
-
-souffle::RamDomain to_souffle(souffle::RecordTable *recordTable, const recexpr &expr, recexpr::size_type i)
-{
-    term t = expr[i];
-    switch (t.tag)
-    {
-    case LAM:
-    {
-        return mk_lam(recordTable, to_souffle(recordTable, expr, t.data.body));
-    }
-    case APP:
-    {
-        recexpr::size_type f = to_souffle(recordTable, expr, t.data.app.first);
-        recexpr::size_type x = to_souffle(recordTable, expr, t.data.app.second);
-        return mk_app(recordTable, f, x);
-    }
-    case NUM:
-    case SYM:
-    case VAR:
-    case BVAR:
-    {
-        const souffle::RamDomain myTuple[2] = {t.tag, t.data.ramdom};
-        return recordTable->pack(myTuple, 2);
-    }
-    default:
-        assert(false && "Missing case in varopen");
-    }
+    souffle::RamDomain myTuple2[2] = {FVAR, i};
+    return recordTable->pack(myTuple2, 2);
 }
 
 /*
 
-Varopen takes a level and an expression id and replaces bvar(level) with that expression id. 
+Varopen takes a level and an expression id and replaces bvar(level) with that expression id.
 This is performing substitution basically.
 Traversing a lambda binder increases the level
 
@@ -197,14 +79,22 @@ let rec varopen k e (t : ln) =
 let instantiate (e : ln) (t : scope) : ln = varopen 0 e t.scope
 */
 
-recexpr::size_type varopen(recexpr &expr, souffle::RamDomain level, recexpr::size_type e, recexpr::size_type i)
+souffle::RamDomain varopen(souffle::RecordTable *recordTable, souffle::RamDomain level, souffle::RamDomain e, souffle::RamDomain i)
 {
-    term t = expr[i];
-    switch (t.tag)
+    const souffle::RamDomain *myTuple0 = recordTable->unpack(i, 2);
+    souffle::RamDomain tag = myTuple0[0];
+    switch (tag)
     {
+    case T2:
+    {
+        const souffle::RamDomain *f_x = recordTable->unpack(myTuple0[1], 2);
+        const souffle::RamDomain f = varopen(recordTable, level, e, f_x[0]);
+        const souffle::RamDomain x = varopen(recordTable, level, e, f_x[1]);
+        return mk_t2(recordTable, f, x);
+    }
     case BVAR:
     {
-        if (t.data.ramdom == level)
+        if (myTuple0[1] == level)
         {
             return e;
         }
@@ -213,23 +103,168 @@ recexpr::size_type varopen(recexpr &expr, souffle::RamDomain level, recexpr::siz
             return i;
         }
     }
-    case LAM:
+    case BIND:
     {
-        return mk_lam(expr, varopen(expr, level + 1, e, t.data.body));
-    }
-    case APP:
-    {
-        recexpr::size_type f = varopen(expr, level, e, t.data.app.first);
-        recexpr::size_type x = varopen(expr, level, e, t.data.app.second);
-        return mk_app(expr, f, x);
+        // could short circuit repacking here.
+        return mk_bind(recordTable, varopen(recordTable, level + 1, e, myTuple0[1]));
     }
     case NUM:
     case SYM:
-    case VAR:
-    case ZFVAR:
+    case FVAR:
         return i;
     default:
         assert(false && "Missing case in varopen");
+    }
+}
+
+/*
+varclose takes a free variable identifier and replaces it with bvar(level).
+Traversing a lambda binder increases the level
+
+let rec varclose k x (t : ln) : ln =
+  match t with
+  | FVar x' -> if String.(x = x') then BVar k else t
+  | FVarI _ -> t
+  | BVar _ -> t
+  | App (f, y) -> App (varclose k x f, varclose k x y)
+  | Lam body -> Lam { scope = varclose (k + 1) x body.scope }
+
+let abstract (x : string) (t : ln) : scope = { scope = varclose 0 x t }
+*/
+
+souffle::RamDomain varclose(souffle::RecordTable *recordTable, souffle::RamDomain level, souffle::RamDomain fv, souffle::RamDomain i)
+{
+    const souffle::RamDomain *myTuple0 = recordTable->unpack(i, 2);
+    souffle::RamDomain tag = myTuple0[0];
+    switch (tag)
+    {
+    case FVAR:
+    {
+        if (myTuple0[1] == fv)
+        {
+            return mk_bvar(recordTable, level);
+        }
+        else
+        {
+            return i;
+        }
+    }
+    case BIND:
+    {
+        return mk_bind(recordTable, varclose(recordTable, level + 1, fv, myTuple0[1]));
+    }
+    case T2:
+    {
+        const souffle::RamDomain *f_x = recordTable->unpack(myTuple0[1], 2);
+        souffle::RamDomain f = varclose(recordTable, level, fv, f_x[0]);
+        souffle::RamDomain x = varclose(recordTable, level, fv, f_x[1]);
+        return mk_t2(recordTable, f, x);
+    }
+    case NUM:
+    case SYM:
+    case BVAR:
+        return i;
+    default:
+        assert(false && "Missing case in varclose");
+    }
+}
+
+souffle::RamDomain norm_help(souffle::RecordTable *recordTable, std::unordered_map<souffle::RamDomain, souffle::RamDomain> &freemap, souffle::RamDomain t)
+{
+    const souffle::RamDomain *myTuple0 = recordTable->unpack(t, 2);
+    souffle::RamDomain tag = myTuple0[0];
+    switch (tag)
+    {
+    case FVAR:
+    {
+
+        auto elem = freemap.find(myTuple0[1]);
+        if (elem != freemap.end()) // if already seen freevar
+        {
+            return elem->second;
+        }
+        else
+        {
+            souffle::RamDomain nfvar = freemap.size();
+            souffle::RamDomain fvar = mk_fvar(recordTable, nfvar);
+            freemap[myTuple0[1]] = fvar;
+            return fvar;
+        }
+    }
+    case BIND:
+    {
+        return mk_bind(recordTable, norm_help(recordTable, freemap, myTuple0[1]));
+    }
+    case T2:
+    {
+        const souffle::RamDomain *f_x = recordTable->unpack(myTuple0[1], 2);
+        souffle::RamDomain f = norm_help(recordTable, freemap, f_x[0]);
+        souffle::RamDomain x = norm_help(recordTable, freemap, f_x[1]);
+        return mk_t2(recordTable, f, x);
+    }
+    case NUM:
+    case SYM:
+    case BVAR:
+        return t;
+    default:
+        assert(false && "Missing case in varclose");
+    }
+}
+
+// Examples of functor usage:
+// https://github.com/souffle-lang/souffle/blob/master/tests/interface/functors/functors.cpp
+extern "C"
+{
+
+    souffle::RamDomain norm(
+        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain term)
+    {
+        std::unordered_map<souffle::RamDomain, souffle::RamDomain> freemap;
+        return norm_help(recordTable, freemap, term);
+    }
+
+    souffle::RamDomain abstract(
+        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain fv, souffle::RamDomain term)
+    {
+        assert(recordTable && "NULL record table");
+        return varclose(recordTable, 0, fv, term);
+    }
+
+    souffle::RamDomain instantiate(
+        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain e, souffle::RamDomain term)
+    {
+        assert(recordTable && "NULL record table");
+        return varopen(recordTable, 0, e, term);
+    }
+
+    souffle::RamDomain max_var(souffle::RecordTable *recordTable, souffle::RamDomain i)
+    {
+        const souffle::RamDomain *myTuple0 = recordTable->unpack(i, 2);
+        souffle::RamDomain tag = myTuple0[0];
+        switch (tag)
+        {
+        case FVAR:
+        {
+            return myTuple0[1];
+        }
+        case BIND:
+        {
+            return max_var(recordTable, myTuple0[1]);
+        }
+        case T2:
+        {
+            const souffle::RamDomain *f_x = recordTable->unpack(myTuple0[1], 2);
+            souffle::RamDomain f = max_var(recordTable, f_x[0]);
+            souffle::RamDomain x = max_var(recordTable, f_x[1]);
+            return std::max(f, x);
+        }
+        case NUM:
+        case SYM:
+        case BVAR:
+            return -100000;
+        default:
+            assert(false && "Missing case in max_var");
+        }
     }
 }
 
@@ -249,268 +284,63 @@ Two terms from separate relations with free vars. Hmm. The free vars can't clash
 
 -01 -g
 
-*/
+norm1(){
 
-/*
-varclose takes a free variable identifier and replaces it with bvar(level).
-Traversing a lambda binder increases the level
+}
 
-let rec varclose k x (t : ln) : ln =
-  match t with
-  | FVar x' -> if String.(x = x') then BVar k else t
-  | FVarI _ -> t
-  | BVar _ -> t
-  | App (f, y) -> App (varclose k x f, varclose k x y)
-  | Lam body -> Lam { scope = varclose (k + 1) x body.scope }
+norm3(){
 
-let abstract (x : string) (t : ln) : scope = { scope = varclose 0 x t }
-*/
-
-recexpr::size_type varclose(recexpr &expr, souffle::RamDomain level, souffle::RamDomain fv, recexpr::size_type i)
-{
-    term t = expr[i];
-    switch (t.tag)
-    {
-    case ZFVAR:
-    {
-        if (t.data.ramdom == fv)
-        {
-            return mk_bvar(expr, level);
-        }
-        else
-        {
-            return i;
-        }
-    }
-    case LAM:
-    {
-        return mk_lam(expr, varclose(expr, level + 1, fv, t.data.body));
-    }
-    case APP:
-    {
-        recexpr::size_type f = varclose(expr, level, fv, t.data.app.first);
-        recexpr::size_type x = varclose(expr, level, fv, t.data.app.second);
-        return mk_app(expr, f, x);
-    }
-    case NUM:
-    case SYM:
-    case VAR:
-    case BVAR:
-        return i;
-    default:
-        assert(false && "Missing case in varclose");
-    }
 }
 
 
-/*
-beta_norm traverses and looks for shapes app(f,x). It normalizes f and x, if f is of the shape lam(b) then it performs
-substitution [x/bvar(0)] b via varopen.
-Whenever you go into a lambda, you need to replace that bvar(0) with a fresh variable. This is smart because substitution
-messes with de bruijn indices.
+subst(t,  i){
 
-let rec norm (t : ln) : ln =
-  match t with
-  | Lam t' ->
-      let v = fresh () in
-      let t'' = instantiate (FVarI v) t' in
-      Lam (abstract' v (norm t''))
-  | App (t, u) -> (
-      let t' = norm t in
-      let u' = norm u in
-      match t' with Lam t'' -> norm (instantiate u' t'') | _ -> App (t', u'))
-  | _ -> t
+}
+subst is like var close, except we're not rebinding to lambda, so we're not turning fvar into bvar, just a whole new
+closed term.
+
+
+
+norm2(t1,t2){
+    beta_norm(t1);
+    beta_norm(t2);
+    var_seen()
+    to_souffle( , 0, ); // we're traversing the term anyway. We might as well label freevars while we're at it.
+
+}
+
+
+foo(t), bar(t2). The free vars should actually not be related at all.
+
+disjoint_vars(t1,t2){
+    max_var(t1)
+}
+shift_fvars(t2, n){
+
+}
+Ok this is definable at souffle level.
+
+But what about contexts?
+The number of something in the set depends on the var lavelling but if we choose a traversal order to canonize var labelling
+It's chcken and egg.
+That's why seperate uf is good idea.
+We could normalize according to this method in C++ and then build ordinary term system?
+But then we need to sort terms without their' souffle hash cons id
+
+
+We can
+1. abandon set-like character. Require explicit contraction and stuff
+2.
+3. revert to th version wehre context can only refer to vars in head and linear vars.
+    I mean, this might get us pretty darn far.
+
+
+Context Lists?
+
+
+
+
+
+
+
 */
-
-recexpr::size_type beta_norm(recexpr &expr, souffle::RamDomain &fresh, recexpr::size_type i)
-{
-    term t = expr[i];
-    switch (t.tag)
-    {
-    case LAM:
-    {
-        souffle::RamDomain curfresh = fresh;
-        recexpr::size_type b = varopen(expr, 0, mk_fvar(expr, curfresh), t.data.body);
-        fresh++;
-        return mk_lam(expr, varclose(expr, 0, curfresh, beta_norm(expr, fresh, b)));
-    }
-    case APP:
-    {
-        recexpr::size_type f = beta_norm(expr, fresh, t.data.app.first);
-        recexpr::size_type x = beta_norm(expr, fresh, t.data.app.second);
-        if (expr[f].tag == LAM)
-        {
-            recexpr::size_type fx = varopen(expr, 0, x, expr[f].data.body);
-            return beta_norm(expr, fresh, fx);
-        }
-        else
-        {
-            return mk_app(expr, f, x);
-        }
-    }
-    case NUM:
-    case SYM:
-    case VAR:
-    case BVAR:
-    case ZFVAR:
-        return i;
-    default:
-        assert(false && "Missing case in beta_norm");
-    }
-}
-
-// Examples of functor usage:
-// https://github.com/souffle-lang/souffle/blob/master/tests/interface/functors/functors.cpp
-extern "C"
-{
-
-    souffle::RamDomain beta_norm(
-        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain arg)
-    {
-        recexpr expr;
-        recexpr::size_type t = from_souffle(recordTable, arg, expr);
-        souffle::RamDomain fresh = 0;
-        recexpr::size_type t1 = beta_norm(expr, fresh, t);
-        return to_souffle(recordTable, expr, t1);
-    }
-
-    souffle::RamDomain count_var(
-        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable, souffle::RamDomain arg)
-    {
-        assert(symbolTable && "NULL symbol table");
-        assert(recordTable && "NULL record table");
-
-        if (arg == 0)
-        {
-            return 0;
-        }
-        else
-        {
-            const souffle::RamDomain *myTuple0 = recordTable->unpack(arg, 2);
-            souffle::RamDomain tag = myTuple0[0];
-            assert(tag <= NTAGS && "Unexpected Tag in count_var");
-            if (tag == VAR)
-            {
-                return 1;
-            }
-            else if (tag == APP)
-            {
-                const souffle::RamDomain *fargs = recordTable->unpack(myTuple0[1], 2);
-                // Could do something smarter than recursion here.
-                return count_var(symbolTable, recordTable, fargs[0]) + count_var(symbolTable, recordTable, fargs[1]);
-            }
-            else
-            {
-                return 0;
-            }
-        }
-    }
-
-    // Returns nil if failure to reabstract
-    // Check for that on souffle side.
-    // beta_zero?
-
-    // The args are speicifed by the site at which the pattern occurs.
-    souffle::RamDomain reabstract(
-        souffle::RecordTable *recordTable,
-        souffle::RamDomain term,
-        int level,
-        const std::vector<souffle::RamDomain> &args)
-    {
-        assert(recordTable && "NULL record table");
-        assert(term != 0 && "reabstract of nil");
-
-        const souffle::RamDomain *myTuple0 = recordTable->unpack(term, 2);
-        souffle::RamDomain tag = myTuple0[0];
-        assert(tag <= 3 && "Unexpected Tag in count_var");
-        switch (tag)
-        {
-        case APP:
-        {
-            const souffle::RamDomain *f_x = recordTable->unpack(myTuple0[1], 2);
-            const souffle::RamDomain f = reabstract(recordTable, f_x[0], level, args);
-            // TODO early fail
-            if (f == NIL)
-            {
-                return NIL;
-            }
-            const souffle::RamDomain x = reabstract(recordTable, f_x[1], level, args);
-            if (x == NIL)
-            {
-                return NIL;
-            }
-            return mk_app(recordTable, f, x);
-        }
-        case BVAR: // reabstract var in in known
-        {
-            souffle::RamDomain i = myTuple0[1];
-            if (i < level)
-            {
-                return term;
-            }
-            auto varind = std::find(args.begin(), args.end(), i - level); // search for bvar minus the extra lambdas we've traversed
-            if (varind != args.end())                                     // Found bvar
-            {
-                return mk_bvar(recordTable, level + static_cast<souffle::RamDomain>(varind - args.begin()));
-            }
-            else
-            {
-                // std::cout << "did not find bvar" << i << level << i - level;
-                //  Maybe I should just throw an exception to be caught. Eh.
-                return NIL;
-            }
-        }
-        case LAM:
-        {
-            // shift args? No. Reabstract is written in terms of the original position.
-            // raise current level.
-            const souffle::RamDomain b = reabstract(recordTable, myTuple0[1], level + 1, args);
-            if (b == NIL)
-            {
-                return NIL;
-            }
-            return mk_lam(recordTable, b);
-        }
-        case NUM:
-        case SYM:
-        case VAR:
-            return term;
-        default:
-            assert(false && "Missed Case in reabstract");
-        }
-    }
-
-    souffle::RamDomain reabstract1(
-        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable,
-        souffle::RamDomain term,
-        souffle::RamDomain x0)
-    {
-        std::vector<souffle::RamDomain> args{x0};
-        souffle::RamDomain res = reabstract(recordTable, term, 0, args);
-        if (res != NIL)
-        {
-            return mk_lam(recordTable, res);
-        }
-        else
-        {
-            return NIL;
-        }
-    }
-
-    souffle::RamDomain reabstract2(
-        souffle::SymbolTable *symbolTable, souffle::RecordTable *recordTable,
-        souffle::RamDomain term,
-        souffle::RamDomain x0, souffle::RamDomain x1)
-    {
-        std::vector<souffle::RamDomain> args{x0, x1};
-        souffle::RamDomain res = reabstract(recordTable, term, 0, args);
-        if (res != NIL)
-        {
-            return mk_lam(recordTable, mk_lam(recordTable, res));
-        }
-        else
-        {
-            return NIL;
-        }
-    }
-}

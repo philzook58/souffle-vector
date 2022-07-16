@@ -1,6 +1,37 @@
 #include "term.dl"
 
+
+//.decl testscope(s : term)
+//testscope(s) :- s = @instantiate($FVar(1), as($BVar(1), scope)).
+//.output testscope(IO=stdout)
 .decl test_term(t : symbol)
+
+test_term("instantiate test") :- s = as($BVar(0), scope), $FVar(-1) != @instantiate($FVar(-1), s).
+
+test_term("instantiate test") :- s = as($BVar(0), scope), $Num(42) != @instantiate($Num(42), s).
+test_term("instantiate test 2") :- s = as(MKBIND($BVar(1)), scope), MKBIND($FVar(-1)) != @instantiate($FVar(-1), s).
+test_term("instantiate test 2") :- s = as(MKBIND($BVar(0)), scope), MKBIND($BVar(0)) != @instantiate($FVar(-1), s).
+test_term("norm test 1") :- $T2($FVar(0), $FVar(1)) != @norm($T2($FVar(7), $FVar(-14))).
+test_term("norm test 2") :- $T2($FVar(0), $FVar(0)) != @norm($T2($FVar(7), $FVar(7))).
+test_term("norm test 2") :- $T2($T2($FVar(0), $FVar(1)), $FVar(0)) != @norm($T2($T2($FVar(7), $FVar(8)), $FVar(7))).
+
+test_term("asbtract test 1") :- as($BVar(0), scope)  != @abstract(14, $FVar(14)).
+test_term("asbtract test 2") :- as($FVar(14), scope) != @abstract(15, $FVar(14)).
+test_term("asbtract test 2") :- as(MKBIND($BVar(1)), scope) != @abstract(14, MKBIND($FVar(14))).
+
+#define LAM(b) $T2($Sym("Lam"), MKBIND(b))
+#define APP(f,x) $T2($T2($Sym("APP"), f), x)
+
+beta_q(@norm(b)) :- beta_q(t), t = LAM(b), b2 = @instantiate($FVar(-1), b).
+beta_q(f), beta_q(x) :- beta_q(t), t = APP(f,x).
+beta_q( @instantiate(x1,b) ) :- beta_q(APP(f,x)), beta(f,LAM(b)), beta(x,x1).
+beta(APP(f,x), z) :- beta_q(APP(f,x)), beta(f,LAM(b)), beta(x,x1), beta( @instantiate(x1,b), z ).
+/*
+very clunky
+*/
+
+/*
+
 test_term("Sym not var") :- t  = $Sym("a"), @count_var(t) != 0.
 test_term("Var has count 1") :- t  = $Var(), @count_var(t) != 1.
 test_term("Combo has count 1") :- t  = $App($Var(), $Sym("a")),  @count_var(t) != 1.
@@ -33,7 +64,7 @@ test_term("beta test 5") :- $App($App($Lam($Lam($App($BVar(0), $BVar(1)))), $Sym
                             @beta_norm(t) != $App($Sym("f"), $Sym("x")).
 test_term("beta test 6") :- $App($Lam($Lam($App($BVar(0), $BVar(1)))), $Sym("x")) = t, @beta_norm(t) != $Lam($App($BVar(0), $Sym("x"))).
 test_term("beta test 7") :- $App($Lam($Lam($App($BVar(1), $BVar(1)))), $Sym("x")) = t, @beta_norm(t) != $Lam($App($Sym("x"), $Sym("x"))).
-
+*/
 /*
 
 Enumerate terms and normalize them? look for crashes.

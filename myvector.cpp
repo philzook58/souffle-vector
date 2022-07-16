@@ -507,6 +507,7 @@ extern "C"
 
     // uf_union
     // uf_inter
+    // disjoint_union. concat the two, but shift the second by the largest of the first.
 
     // uf_sub doesn't need normalization persay
     // but we need to know which keys have been seen and which haven't
